@@ -3,6 +3,44 @@ import sqlite3 from 'sqlite3';
 
 const DB_NAME = '__FORZENDB__.db';
 
+export interface Entity {
+  tableName: string;
+}
+
+export enum ColumnType {
+  INTEGER = 'INTEGER',
+  TEXT = 'TEXT',
+  REAL = 'REAL',
+}
+
+export interface Column {
+  isPrimaryKey: boolean;
+  name: string;
+  type: ColumnType;
+  allowNull: boolean;
+}
+
+export class TableDefinition {
+  constructor(
+    public readonly name: string,
+    public readonly columns: Column[],
+  ) {}
+
+  static column(
+    name: string,
+    type: ColumnType,
+    allowNull: boolean = true,
+    isPrimaryKey: boolean = false,
+  ): Column {
+    return {
+      name: name,
+      type: type,
+      allowNull: allowNull,
+      isPrimaryKey: isPrimaryKey,
+    } as Column;
+  }
+}
+
 export interface ForzenDb {
   /**
    * Begin a session of database operations. Call endSession once done to finish.
@@ -33,6 +71,14 @@ export interface ForzenDb {
   exec(sql: string): Promise<void>;
 
   /**
+   * Create a table in the database with the given schema definition.
+   *
+   * @param table The table definition to make the table from
+   * @param allowPreexisting Whether or not it's allowed that the table existed already
+   */
+  createTable(table: TableDefinition, allowPreexisting: boolean): Promise<void>;
+
+  /**
    * Run a sql query and return a value.
    *
    * @param sql The sql statement to execute
@@ -58,6 +104,13 @@ export interface ForzenDb {
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   all<T>(sql: string, args: any[]): Promise<T[]>;
+
+  /**
+   * Insert an entity into the database.
+   *
+   * @param entity The entity to insert into the database
+   */
+  insert(entity: Entity): Promise<void>;
 }
 
 export class ForzenSqliteDb implements ForzenDb {
@@ -100,6 +153,21 @@ export class ForzenSqliteDb implements ForzenDb {
         await this.endSession();
       }
     }
+  }
+
+  async createTable(table: TableDefinition, allowPreexisting: boolean = true): Promise<void> {
+    let sql = 'CREATE TABLE ' + (allowPreexisting ? 'IF NOT EXISTS ' : '') + table.name + ' (';
+    sql += table.columns.map((column: Column) => this.makeColumnSqlEntry(column)).join(',');
+    sql += ');';
+    await this.exec(sql);
+  }
+
+  private makeColumnSqlEntry(column: Column): string {
+    return (
+      `${column.name} ${column.type}` +
+      (column.isPrimaryKey ? ' PRIMARY KEY' : '') +
+      (column.allowNull ? '' : ' NOT NULL')
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,5 +225,17 @@ export class ForzenSqliteDb implements ForzenDb {
         await this.endSession();
       }
     }
+  }
+
+  async insert(entity: Entity): Promise<void> {
+    const keys = Object.keys(entity).filter((key: string) => key != 'tableName');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const keyValueMap: { [key: string]: any } = { ...entity };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sqlArgumentMap: any[] = keys.map((key: string) => keyValueMap[key] as any);
+
+    const qMarks = keys.map(() => '?').join(',');
+    const sql = `INSERT INTO ${entity.tableName} ( ${keys.join(',')} ) VALUES (${qMarks})`;
+    await this.run(sql, sqlArgumentMap);
   }
 }
