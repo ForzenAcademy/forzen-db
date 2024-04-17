@@ -20,6 +20,8 @@ async function main() {
     await db.createTable(table, true);
     const testObj = { tableName: 'my_table_2', foo: 1337, bar: 'potato' } as Entity;
     await db.insert(testObj);
+
+    console.log(await db.get('SELECT * FROM my_table', []));
   });
 }
 

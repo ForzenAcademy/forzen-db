@@ -79,7 +79,7 @@ export interface ForzenDb {
   createTable(table: TableDefinition, allowPreexisting: boolean): Promise<void>;
 
   /**
-   * Run a sql query and return a value.
+   * Run a sql query and returns the.
    *
    * @param sql The sql statement to execute
    * @param args The arguments to replace into the sql statement
@@ -197,7 +197,7 @@ export class ForzenSqliteDb implements ForzenDb {
         await this.createConnection();
       }
       if (!this.db) throw 'DATABASE ERROR';
-      return (await this.db.run(sql, args)) as T;
+      return (await this.db.get(sql, args)) as T;
     } catch (error) {
       console.log(`DATABASE ERROR FOR QUERY:\n${sql}`);
       throw error;
